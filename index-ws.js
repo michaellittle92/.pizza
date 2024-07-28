@@ -4,10 +4,22 @@ const app = express();
 
 app.get('/', function(req, res){
     res.sendFile('index.html', {root: __dirname});
-});
+})
 
 server.on('request', app);
 server.listen(3000, function() {console.log('Listening on 3000');});
+
+
+
+process.on('SIGINT', ()=>{
+    console.log('sigint');
+    wss.clients.forEach(function closeEach(client){
+        client.close();
+    });
+    server.close(()=>{
+        shutdownDB();
+    });
+});
 
 /* Begin websockets */
 
@@ -25,6 +37,10 @@ wss.on('connection',function connection(ws){
         ws.send('Welcome to my server');
 
    }
+
+   db.run(`INSERT INTO visitors (count, time)
+            VALUES(${numClients}, datetime('now'))
+   `)
    ws.on('close', function close(){
     console.log('A client has disconnected');
    });
@@ -35,3 +51,33 @@ wss.broadcast = function broadcast(data){
         client.send(data);
     })
 }
+
+/*end websockets */
+
+/*begin database */
+
+const sqlite = require('sqlite3');
+const db = new sqlite.Database(':memory:');
+
+db.serialize(() =>{
+    db.run(`
+        CREATE TABLE visitors (
+            count INTEGER,
+            time TEXT
+        )
+    `)
+});
+
+function getCounts(){
+    db.each("SELECT * FROM visitors", (err, row)=>{
+        console.log(row);
+    } )
+}
+
+function shutdownDB(){
+    getCounts(); 
+    console.log('shutting down DB');
+    db.close();
+}
+
+/*end database */
